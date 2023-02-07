@@ -1,6 +1,6 @@
 # DD-NM-ROM
 Author: Alejandro Diaz  
-The code in this repo and its documentation is a work in progress. If you have any questions, please email me at and5@rice.edu
+The code in this repo and its documentation is a work in progress. If you have any questions, please email me at and5@rice.edu.
 
 ## Requirements
 - To use the code in this repo, first create an Open-CE v1.7.2 with CUDA-11.4 for Lassen environment following the instructions [here](https://lc.llnl.gov/confluence/display/LC/2022/10/20/Open-CE+v1.7.2+with+CUDA-11.4+for+Lassen).  
@@ -43,4 +43,4 @@ For generating POD bases for the problem sizes considered in this repo, the SVD 
   * --intr_only         Only train autoencoders for interior states
   * --intf_only         Only train autoencoders for interface states
   * --act_type          Activation type. Only Sigmoid and Swish are implemented
-- After train_rom.sh finishes, run the jupyter noteboo driver_NMROM.ipynb. 
+- After train_rom.sh finishes, run the jupyter notebook driver_NMROM.ipynb. 
