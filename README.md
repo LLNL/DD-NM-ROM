@@ -23,8 +23,9 @@ For generating POD bases for the problem sizes considered in this repo, the SVD 
   * --tol:        absolute tolerance for Newton solver
 
 ## Training a DD-LS-ROM (do this first)
-- Run the notebook driver_DD_LSROM.ipynb in the CPU environment first on all configurations of interest (e.g. subdomain configurations). 
-  * Running on CPUs first lets you compute and store SVD data of snapshots, which then won't have to be recomputed in GPU environment. 
+- Run the notebook driver_DD_LSROM.ipynb in the CPU environment first on all configurations of interest.
+- For example, run with different subdomain configurations, different number of training snapshots, etc. 
+- Running on CPUs first lets you compute and store SVD data of snapshots, which then won't have to be recomputed in GPU environment. 
 
 ## Training a DD-NM-ROM
 - Make sure the driver_LSROM notebook (see previous section) is run on the desired configuration using a CPU to store POD basis data. 
@@ -45,3 +46,7 @@ For generating POD bases for the problem sizes considered in this repo, the SVD 
   * --intf_only:         Only train autoencoders for interface states
   * --act_type:          Activation type. Only Sigmoid and Swish are implemented
 - After train_rom.sh finishes, run the jupyter notebook driver_NMROM.ipynb. 
+
+## Generating Pareto fronts
+- First run jobs nmrom_nsnaps.sh, nmrom_sizes.sh to train NM-ROMs using different numbers of snapshots and different ROM sizes, respectively. 
+- Run the notebooks driver_pareto_hr.ipynb, driver_pareto_nsnaps.ipynb, driver_pareto_romsize.ipynb.
