@@ -5,8 +5,8 @@ The code in this repo and its documentation is a work in progress. If you have a
 
 ## Requirements
 - To use the code in this repo, first create an Open-CE v1.7.2 with CUDA-11.4 for Lassen environment following the instructions [here](https://lc.llnl.gov/confluence/display/LC/2022/10/20/Open-CE+v1.7.2+with+CUDA-11.4+for+Lassen).  
-  * In Open-CE, also install the torch-sparse, torch-scatter, and sparselinear packages.
-- Install jupyter for the Open-CE using the instructions on the PowerAI page [here](https://lc.llnl.gov/confluence/display/LC/IBM+PowerAI+in+LC).
+  * In the Open-CE environment, also install the torch-sparse, torch-scatter, and sparselinear packages.
+- Install jupyter for the Open-CE environment using the instructions on the PowerAI page [here](https://lc.llnl.gov/confluence/display/LC/IBM+PowerAI+in+LC).
 - I also recommend creating a virtual environment containing PyTorch that can be run on a CPU machine (e.g. quartz) ([instructions](https://lc.llnl.gov/confluence/display/LC/PyTorch+in+LC)).
 For generating POD bases for the problem sizes considered in this repo, the SVD routine is much faster on CPUs. 
 - Install jupter for ypur CPU PyTorch environment ([instructions](https://lc.llnl.gov/confluence/display/LC/JupyterHub+and+Jupyter+Notebook)). 
@@ -28,7 +28,7 @@ For generating POD bases for the problem sizes considered in this repo, the SVD 
 - Running on CPUs first lets you compute and store SVD data of snapshots, which then won't have to be recomputed in GPU environment. 
 
 ## Training a DD-NM-ROM
-- Make sure the driver_LSROM notebook (see previous section) is run on the desired configuration using a CPU to store POD basis data. 
+- Make sure the driver_DD_LSROM.ipynb notebook (see previous section) is run on the desired configuration using a CPU to store POD basis data. 
 - Run train_rom.sh. This runs the python script driver_train_rom.py, which takes the following optional arguments 
   * --nx:                number of grid points in x-direction
   * --ny:                number of grid points in y-direction
@@ -45,7 +45,7 @@ For generating POD bases for the problem sizes considered in this repo, the SVD 
   * --intr_only:         Only train autoencoders for interior states
   * --intf_only:         Only train autoencoders for interface states
   * --act_type:          Activation type. Only Sigmoid and Swish are implemented
-- After train_rom.sh finishes, run the jupyter notebook driver_NMROM.ipynb. 
+- After train_rom.sh finishes, run the jupyter notebook driver_DD_NMROM.ipynb. 
 
 ## Generating Pareto fronts
 - First run jobs nmrom_nsnaps.sh, nmrom_sizes.sh to train NM-ROMs using different numbers of snapshots and different ROM sizes, respectively. 
