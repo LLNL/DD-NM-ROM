@@ -1,5 +1,6 @@
 # DD-NM-ROM
 Author: Alejandro Diaz  
+We apply LS-ROM and NM-ROM to the 2D Burgers equation.  
 The code in this repo and its documentation is a work in progress. If you have any questions, please email me at and5@rice.edu.
 
 ## Requirements
