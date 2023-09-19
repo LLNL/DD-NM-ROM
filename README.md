@@ -9,7 +9,7 @@ The code in this repo and its documentation is a work in progress. If you have a
 - Install jupyter for the Open-CE environment using the instructions on the PowerAI page [here](https://lc.llnl.gov/confluence/display/LC/IBM+PowerAI+in+LC).
 - I also recommend creating a virtual environment containing PyTorch that can be run on a CPU machine (e.g. quartz) ([instructions](https://lc.llnl.gov/confluence/display/LC/PyTorch+in+LC)). The dill package is also needed here. 
 For generating POD bases for the problem sizes considered in this repo, the SVD routine is much faster on CPUs. 
-- Install jupter for ypur CPU PyTorch environment ([instructions](https://lc.llnl.gov/confluence/display/LC/JupyterHub+and+Jupyter+Notebook)). 
+- Install jupyter for ypur CPU PyTorch environment ([instructions](https://lc.llnl.gov/confluence/display/LC/JupyterHub+and+Jupyter+Notebook)). 
 
 ## Generating snapshot data for training
 - To generate the training data, ssh into lassen and run generate_training_data.sh. This runs the scipts generate_residual_data.py and generate_snapshot_data.py.
