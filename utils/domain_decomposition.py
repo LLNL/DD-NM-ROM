@@ -1,5 +1,4 @@
 # domain_decomposition.py
-# Author: Alejandro Diaz
 
 import numpy as np
 import scipy.sparse as sp
@@ -40,10 +39,13 @@ class subdomain_indices:
                 for row in res_ind:
                     # for each row, finds nonzero columns in fom matrices
                     # leverages coo_matrix format
-                    full_ind = full_ind.union(set(fom.Bx.col[fom.Bx.row==row]))    
-                    full_ind = full_ind.union(set(fom.By.col[fom.By.row==row]))
-                    full_ind = full_ind.union(set(fom.Cx.col[fom.Cx.row==row]))    
-                    full_ind = full_ind.union(set(fom.Cy.col[fom.Cy.row==row]))    
+                    for M in [fom.Bx, fom.By, fom.Cx, fom.Cy]:
+                        M = M.tocoo()
+                        full_ind = full_ind.union(set(M.col[M.row==row]))
+#                     full_ind = full_ind.union(set(fom.Bx.col[fom.Bx.row==row]))    
+#                     full_ind = full_ind.union(set(fom.By.col[fom.By.row==row]))
+#                     full_ind = full_ind.union(set(fom.Cx.col[fom.Cx.row==row]))    
+#                     full_ind = full_ind.union(set(fom.Cy.col[fom.Cy.row==row]))    
 
                 # stores indices for current subdomain
                 res_sub_indices.append(np.sort(np.array(res_ind)))
@@ -90,16 +92,19 @@ class subdomain_model:
     interior_ind: array of interior indices corresponding to the subdomain to be generated
     interface_ind: array of interface_ind indices corresponding to the subdomain to be generated
     constraint_mat: constraint matrix corresponding to the interface states of the subdomain
-    in_ports: array containing which ports the subdomain belongs toa
+    in_ports: array containing which ports the subdomain belongs to
     
     methods:
     update_bc: update boundary condition data on subdomain
     res_jac: compute residual and its jacobian on the subdomain
     '''
-    def __init__(self, fom, residual_ind, interior_ind, interface_ind, constraint_mat, in_ports):
+    def __init__(self, fom, residual_ind, interior_ind, interface_ind, constraint_mat, in_ports, scaling=1):
         # stores necessary fom quantities
         self.hx = fom.hx
         self.hy = fom.hy
+        self.hxy = fom.hxy
+        self.scaling=scaling
+        
         self.viscosity = fom.viscosity
         self.constraint_mat = constraint_mat
         self.in_ports = in_ports
@@ -240,8 +245,9 @@ class subdomain_model:
         Ax = self.constraint_mat@np.concatenate([u_interface, v_interface])
         
         jac = sp.hstack([jac_interior, jac_interface])
-        H   = jac.T@jac
-        rhs = np.concatenate([jac_interior.T@res, jac_interface.T@res+self.constraint_mat.T@lam])
+        H   = self.scaling*(jac.T@jac)
+        rhs = np.concatenate([self.scaling*(jac_interior.T@res), 
+                              self.scaling*(jac_interface.T@res)+self.constraint_mat.T@lam])
         
         return res, jac, H, rhs, Ax
     
@@ -272,9 +278,13 @@ class DD_model:
     solve: solves for the states of the DD model using the Lagrange-Newton-SQP method
     '''
     def __init__(self, fom, num_sub_x, num_sub_y,
-                 constraint_type='strong', n_constraints=1, seed=None):
+                 constraint_type='strong', n_constraints=1, seed=None, scaling=1):
         self.nxy = fom.nxy
+        self.hxy = fom.hxy
         self.n_sub = num_sub_x*num_sub_y
+        
+        # scaling factor for residual 
+        self.scaling = self.hxy if scaling < 0 else scaling
         
         # generate subdomain indices for given number of subdomains
         indices = subdomain_indices(fom, num_sub_x, num_sub_y)
@@ -354,7 +364,8 @@ class DD_model:
                                                   indices.interior[i],
                                                   indices.interface[i], 
                                                   constraint_mat[i], 
-                                                  in_ports[i]))
+                                                  in_ports[i], 
+                                                  scaling=self.scaling))
             
     # update BC data for each subdomain
     def update_bc(self, fom):
@@ -388,8 +399,10 @@ class DD_model:
         outputs:
         val: RHS of the KKT system
         full_jac: KKT matrix
-        
+        runtime: "parallel" runtime to assemble KKT system
+
         '''
+        start = time()
         shift = 0
         val = list([])
         A_list = list([])
@@ -397,7 +410,11 @@ class DD_model:
 
         constraint_res = np.zeros(self.n_constraints)
         lam = w[-self.n_constraints:]
-        for s in self.subdomain:
+        runtime = time()-start
+        stimes = np.zeros(self.n_sub)
+        
+        for i, s in enumerate(self.subdomain):
+            start = time()
             interior_ind  = np.arange(s.n_interior)
             interface_ind = np.arange(s.n_interface)
 
@@ -413,34 +430,27 @@ class DD_model:
             
             # computes residual, jacobian, and other quantities needed for KKT system
             res, jac, H, rhs, Ax = s.res_jac(u_interior, v_interior, u_interface, v_interface, lam)
-        
+            stimes[i] = time()-start
+            
             # RHS block for KKT system
+            start = time()
             val.append(rhs)
             constraint_res += Ax
             
             H_list.append(H)
             A_list += [sp.csr_matrix((self.n_constraints, 2*s.n_interior)), s.constraint_mat]
-            
-#             res, jac_interior, jac_interface = s.res_jac(u_interior, v_interior, u_interface, v_interface)
-            
-#             ATlam = s.constraint_mat.T@lam
-
-#             val.append(np.concatenate([jac_interior.T@res, jac_interface.T@res+ATlam]))
-            
-#             constraint_res += s.constraint_mat@np.concatenate([u_interface, v_interface])
-
-#             jac = sp.hstack([jac_interior, jac_interface])
-#             H = jac.T@jac
-            
-#             H_list.append(H)
-#             A_list += [sp.csr_matrix((self.n_constraints, 2*s.n_interior)), s.constraint_mat]
-
+            runtime += time()-start
+        
+        start = time()
         val.append(constraint_res)
         val = np.concatenate(val)
         H_block = sp.block_diag(H_list)
         A_block = sp.hstack(A_list)
         full_jac = sp.bmat([[H_block, A_block.T], [A_block, None]]).tocsr()
-        return val, full_jac
+        runtime += time()-start
+        runtime += stimes.max()
+        
+        return val, full_jac, runtime
     
     def solve(self, w0, tol=1e-5, maxit=20, print_hist=False):
         '''
@@ -468,9 +478,7 @@ class DD_model:
         itr: number of iterations for Newton solver
         '''
         print('Starting Newton solver...')
-        start = time()
-        y, res_vecs, res_hist, step_hist, itr = newton_solve(self.FJac, w0, tol=tol, maxit=maxit, print_hist=print_hist)
-        runtime = time()-start
+        y, res_vecs, res_hist, step_hist, itr, runtime = newton_solve(self.FJac, w0, tol=tol, maxit=maxit, print_hist=print_hist)
         print(f'Newton solver terminated after {itr} iterations with residual {res_hist[-1]:1.4e}.')
         
         # assemble solution on full domain from DD solution

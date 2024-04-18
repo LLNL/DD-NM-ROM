@@ -1,5 +1,4 @@
 # autoencoder.py
-# Author: Alejandro Diaz
 
 import torch
 from torch import nn
@@ -153,6 +152,47 @@ class Encoder(nn.Module):
     '''
     def forward(self, w):
         return self.net((w-self.ref)/self.scale)
+    
+class Encoder_dense(nn.Module):
+    '''
+    Generic class for dense encoder part of autoencoder. 
+    The struture is shallow with one hidden layer.
+    
+    inputs:
+    input_dim:  dimension of input data
+    hidden_dim: dimension of linear hidden layer
+    latent_dim: dimension of latent dimension
+    scale:      (input_dim,) tensor for scaling input data
+    ref:        (input_dim,) tensor for shifting input data
+    activation: [optional] activation function between hidden and output layer. 'Swish' or 'Sigmoid'. Default is 'Sigmoid'
+    '''
+    def __init__(self, input_dim, hidden_dim, latent_dim, 
+                 scale, ref,
+                 act_fun=nn.Sigmoid):
+        super(Encoder_dense, self).__init__()
+        self.input_dim = input_dim
+        self.hidden_dim = hidden_dim
+        self.latent_dim = latent_dim
+        self.scale = scale
+        self.ref = ref
+        self.net = nn.Sequential(
+#             SparseLinear(input_dim, hidden_dim, connectivity=torch.LongTensor(np.vstack((mask.row, mask.col)))), 
+            nn.Linear(input_dim, hidden_dim), 
+            act_fun(),
+            nn.Linear(hidden_dim, latent_dim, bias=False),
+        )
+    
+    '''
+    Evaluate encoder. 
+    
+    input:
+    w: (input_dim) tensor of input data 
+    
+    output: 
+    output: (latent_dim) tensor of output data
+    '''
+    def forward(self, w):
+        return self.net((w-self.ref)/self.scale)
 
 class Decoder(nn.Module):
     '''
@@ -204,6 +244,8 @@ class Autoencoder:
     row_nnz:    number of nonzeros per row of sparsity mask
     row_shift:  amount to shift nonzero band per row in sparsity mask
     device:     PyTorch device. 'cpu' or 'cuda'
+    dense_encoder: [optional] Boolean for using dense encoder. Default is False.
+    encoder_hidden: [optional] dimension of encoder hidden layer. Default uses 2*input_dim
     act_type:   [optional] activation function for encoder and decoder. 'Sigmoid' or 'Swish'. Default is 'Sigmoid'
     test_prop:  [optional] proportion of snapshots data to be used for testing set. Default is 0.1
     lr:         [optional] learning rate. Default is 1e-3
@@ -240,6 +282,8 @@ class Autoencoder:
     train:    train autoencoder
     '''
     def __init__(self, snapshots, latent_dim, row_nnz, row_shift, device, 
+                 dense_encoder=False,
+                 encoder_hidden=-1,
                  act_type='Sigmoid', 
                  test_prop=0.1, 
                  lr=1e-3, 
@@ -282,7 +326,6 @@ class Autoencoder:
                                                        self.row_nnz, 
                                                        self.row_shift, 
                                                        print_sparsity=False)
-        self.encoder_hidden = self.decoder_hidden
         
         self.act_type = act_type
         if act_type == 'Sigmoid':
@@ -293,13 +336,23 @@ class Autoencoder:
             self.act_fun = nn.ELU
             
         # initialize encoder and decoder
-        self.encoder = Encoder(self.input_dim, 
-                               self.encoder_hidden, 
-                               self.latent_dim, 
-                               self.mask.T,
-                               self.scale, 
-                               self.ref, 
-                               act_fun=self.act_fun).to(self.device)
+        if dense_encoder:
+            self.encoder_hidden = 2*self.input_dim if encoder_hidden < 0 else encoder_hidden
+            self.encoder = Encoder_dense(self.input_dim, 
+                                         self.encoder_hidden, 
+                                         self.latent_dim, 
+                                         self.scale, 
+                                         self.ref, 
+                                         act_fun=self.act_fun).to(self.device)
+        else:
+            self.encoder_hidden = self.decoder_hidden
+            self.encoder = Encoder(self.input_dim, 
+                                   self.encoder_hidden, 
+                                   self.latent_dim, 
+                                   self.mask.T,
+                                   self.scale, 
+                                   self.ref, 
+                                   act_fun=self.act_fun).to(self.device)
         self.decoder = Decoder(self.latent_dim, 
                                self.decoder_hidden, 
                                self.output_dim, 
@@ -464,13 +517,13 @@ class Autoencoder:
         print(f'Test MSE Loss: {test_loss_hist[-1]}')
         sys.stdout.flush()
 
-        train_hist_dict = { 'epoch': epoch,
-                            'early_stop_counter': early_stop_counter,
-                            'test_loss_hist': test_loss_hist, 
-                            'train_loss_hist': train_loss_hist,
-                            'best_test_loss': best_test_loss,
-                            'best_train_loss': best_train_loss,
-                            'best_loss_epoch': best_loss_epoch}
+#         train_hist_dict = { 'epoch': epoch,
+#                             'early_stop_counter': early_stop_counter,
+#                             'test_loss_hist': test_loss_hist, 
+#                             'train_loss_hist': train_loss_hist,
+#                             'best_test_loss': best_test_loss,
+#                             'best_train_loss': best_train_loss,
+#                             'best_loss_epoch': best_loss_epoch}
         
         autoencoder_dict = {'encoder': best_encoder, 
                             'decoder': best_decoder, 
@@ -482,7 +535,15 @@ class Autoencoder:
                             'output_dim': self.output_dim, 
                             'encoder_hidden': self.encoder_hidden,
                             'decoder_hidden': self.decoder_hidden, 
-                            'act_type': self.act_type}
+                            'act_type': self.act_type, 
+                            'train_time': train_time, 
+                            'epoch': epoch,
+                            'early_stop_counter': early_stop_counter,
+                            'test_loss_hist': test_loss_hist, 
+                            'train_loss_hist': train_loss_hist,
+                            'best_test_loss': best_test_loss,
+                            'best_train_loss': best_train_loss,
+                            'best_loss_epoch': best_loss_epoch}
         if save_net:
             print('Saving net...')
             sys.stdout.flush()
@@ -492,5 +553,6 @@ class Autoencoder:
         
         self.encoder.load_state_dict(best_encoder)
         self.decoder.load_state_dict(best_decoder) 
+        return autoencoder_dict
         
-        return train_hist_dict, autoencoder_dict
+#         return train_hist_dict, autoencoder_dict

@@ -1,5 +1,4 @@
 # Burgers2D_probgen.py
-# Author: Alejandro Diaz
 
 import numpy as np
 import scipy.sparse as sp
@@ -37,6 +36,7 @@ class Burgers2D:
         
         self.hx = (x_lim[1]-x_lim[0])/(nx+1)
         self.hy = (y_lim[1]-y_lim[0])/(ny+1)
+        self.hxy = self.hx*self.hy
         self.viscosity = viscosity
                
         # x and y grid points
@@ -52,14 +52,14 @@ class Burgers2D:
         # backward difference matrices
         tBx = sp.spdiags([-ex, ex], [-1, 1], nx, nx)
         tBy = sp.spdiags([-ey, ey], [-1, 1], ny, ny)
-        self.Bx  = -(0.5/self.hx)*sp.kron(Iy, tBx)
-        self.By  = -(0.5/self.hy)*sp.kron(tBy, Ix)
+        self.Bx  = -(0.5/self.hx)*sp.kron(Iy, tBx).tocsr()
+        self.By  = -(0.5/self.hy)*sp.kron(tBy, Ix).tocsr()
         
         # centered difference matrices
         tCx = sp.spdiags([ex, -2*ex, ex], [-1, 0, 1], nx, nx)
         tCy = sp.spdiags([ey, -2*ey, ey], [-1, 0, 1], ny, ny)
-        self.Cx  = (self.viscosity/(self.hx*self.hx))*sp.kron(Iy, tCx)
-        self.Cy  = (self.viscosity/(self.hy*self.hy))*sp.kron(tCy, Ix)
+        self.Cx  = (self.viscosity/(self.hx*self.hx))*sp.kron(Iy, tCx).tocsr()
+        self.Cy  = (self.viscosity/(self.hy*self.hy))*sp.kron(tCy, Ix).tocsr()
         
         self.update_bc(u_bc, v_bc)
     

@@ -1,5 +1,4 @@
 # LS_ROM.py
-# Author: Alejandro Diaz
 
 import numpy as np
 import scipy.linalg as la
@@ -15,7 +14,7 @@ def save_svd_data(ddmdl, snapshots, residuals, save_dir='./', nsnaps=-1):
     inputs: 
     ddmdl: instance of DD_model class
     snapshots: list where snapshots[i] = snapshot vector corresponding to ith parameter set
-    residuals: list where residuals[i][j] = Newton residual at jth iteration correpsonding to ith parameter set
+    residuals: list where residuals[i][j] = Newton residual at jth iteration corresponding to ith parameter set
     save_dir: [optional] directory to save data to. Default is current working directory.
     '''
     # gets indices for training snapshots
@@ -30,11 +29,14 @@ def save_svd_data(ddmdl, snapshots, residuals, save_dir='./', nsnaps=-1):
     res_file =save_dir+f'res_svd.p'
     intr_file=save_dir+f'intr_svd_nsnaps_{Nsnaps}.p'        
     intf_file=save_dir+f'intf_svd_nsnaps_{Nsnaps}.p'
+    port_file=save_dir+f'port_svd_nsnaps_{Nsnaps}.p'
     
     intr_leftvecs = []
     intr_singvals = []
     intf_leftvecs = []
     intf_singvals = []
+    port_leftvecs = []
+    port_singvals = []
     res_leftvecs = []
     res_singvals = []
     
@@ -72,20 +74,43 @@ def save_svd_data(ddmdl, snapshots, residuals, save_dir='./', nsnaps=-1):
         intf_singvals.append(s_intf)
         res_leftvecs.append(u_res)
         res_singvals.append(s_res)
-    
+        
+    for p in ddmdl.ports:    # loop over ports
+        port_snaps = []
+
+        # extracts port snapshots
+        print(f'Restricting snapshots to port {p}...')
+        for j in range(Nsnaps):
+            port_snaps.append(np.concatenate([snapshots[j][ddmdl.port_dict[p]], 
+                                              snapshots[j][ddmdl.port_dict[p]+ddmdl.nxy]]))
+        print('Done!')
+
+        # computes SVD
+        print(f'Computing port {p} SVD...')
+        u_port, s_port, vh_port = la.svd(np.vstack(port_snaps).T, full_matrices=False, check_finite=False)
+        print('Done!')
+
+        port_leftvecs.append(u_port)
+        port_singvals.append(s_port)
+        
     # puts left singular vectors and singular values into dictionaries
     intr_dict = {'left_vecs': intr_leftvecs, 
                  'sing_vals': intr_singvals}
     intf_dict = {'left_vecs': intf_leftvecs, 
                  'sing_vals': intf_singvals}
+    port_dict = {'left_vecs': port_leftvecs, 
+                 'sing_vals': port_singvals}
     res_dict = {'left_vecs': res_leftvecs, 
                 'sing_vals': res_singvals}
     
     # saves data
     pickle.dump(intr_dict, open(intr_file,'wb'))
-    pickle.dump(intf_dict, open(intf_file,'wb'))    
+    pickle.dump(intf_dict, open(intf_file,'wb'))
+    pickle.dump(port_dict, open(port_file, 'wb'))
     pickle.dump(res_dict, open(res_file,'wb'))    
-    
+
+# puts left singular vectors and singular values into dictionaries
+
 # compute POD bases given SVD data
 def compute_bases_from_svd(data_dict,
                            ec=1e-8, 
@@ -188,7 +213,7 @@ def compute_bases(ddmdl,
                                               snapshots[j][ddmdl.port_dict[port] + ddmdl.nxy]]))
             port_states.append(port_i)
     
-    if intf_type=='skeleton':
+    elif intf_type=='skeleton':
         # collect skeleton snapshots
         skeleton = [np.concatenate([snapshots[j][ddmdl.skeleton], 
                                     snapshots[j][ddmdl.skeleton+ddmdl.nxy]]) for j in range(len(Mu))]
@@ -350,12 +375,14 @@ class subdomain_LS_ROM:
     subdomain: subdomain class of full-order DD model
     interior_basis: basis for interior states on subdomain
     interface_basis: basis for interface states on subdomain
-    constraint_mult: multiplier for constraint matrix
+    constraint_mat: constraint matrix
     
     methods:
     res_jac: compute residual its jacobian on the subdomain
     '''
-    def __init__(self, subdomain, interior_basis, interface_basis, constraint_mult):
+    def __init__(self, subdomain, interior_basis, interface_basis, constraint_mat, scaling=1):
+        self.hxy = subdomain.hxy
+        self.scaling = scaling
         self.in_ports  = subdomain.in_ports
         
         self.n_residual  = subdomain.n_residual
@@ -409,7 +436,7 @@ class subdomain_LS_ROM:
         self.b_vx2 = subdomain.b_vx2
         self.b_vy2 = subdomain.b_vy2
         
-        self.constraint_mat = constraint_mult@subdomain.constraint_mat@self.intf_basis
+        self.constraint_mat = constraint_mat
         
     def res_jac(self, w_intr, w_intf, lam):
         '''
@@ -485,8 +512,9 @@ class subdomain_LS_ROM:
         Ax = self.constraint_mat@w_intf
         
         jac = np.hstack([jac_intr, jac_intf])
-        H   = jac.T@jac
-        rhs = np.concatenate([jac_intr.T@res, jac_intf.T@res+self.constraint_mat.T@lam])
+        H   = self.scaling*(jac.T@jac)
+        rhs = np.concatenate([self.scaling*(jac_intr.T@res), 
+                              self.scaling*(jac_intf.T@res)+self.constraint_mat.T@lam])
                              
         return res, jac, H, rhs, Ax
     
@@ -501,7 +529,7 @@ class subdomain_LS_ROM_HR:
     interior_basis: basis for interior states on subdomain
     interface_basis: basis for interface states on subdomain
     hr_type: hyper-reduction type. Either 'gappy_POD' or 'collocation'
-    constraint_mult: multiplier for constraint matrix. Depends on constraint type of global DD-LS-ROM (strong or weak)
+    constraint_mat: constraint matrix for subdomain
     nz: number of hyper reduction indices
     ncol: number of working columns for sample node selection algorithm
     n_corners: [optional] number of interface columns to include in sample nodes. Default is 5
@@ -514,10 +542,14 @@ class subdomain_LS_ROM_HR:
                  interior_basis, 
                  interface_basis, 
                  hr_type,
-                 constraint_mult, 
+                 constraint_mat, 
                  nz, 
                  ncol, 
-                 n_corners=5):
+                 n_corners=5,
+                 scaling=1):
+        self.hxy = subdomain.hxy
+        self.scaling = scaling
+        
         # select residual nodes for hyper reduction
         self.hr_ind = select_sample_nodes(subdomain, residual_basis, nz, ncol, n_corners=n_corners)
         self.hr_ind_u = self.hr_ind[self.hr_ind < subdomain.n_residual]
@@ -550,9 +582,8 @@ class subdomain_LS_ROM_HR:
         self.u_intf_basis = interface_basis[0:subdomain.n_interface]
         self.v_intf_basis = interface_basis[subdomain.n_interface:]
         
-        self.constraint_mat = constraint_mult@subdomain.constraint_mat@self.intf_basis
-#                                                         np.vstack([subdomain.constraint_mat@self.u_intf_basis,
-#                                                          subdomain.constraint_mat@self.v_intf_basis])
+        self.constraint_mat = constraint_mat
+        
         # compute reused matrices
         Bx_intr_u = subdomain.Bx_interior[self.hr_ind_u]@self.u_intr_basis
         By_intr_u = subdomain.By_interior[self.hr_ind_u]@self.u_intr_basis
@@ -685,8 +716,9 @@ class subdomain_LS_ROM_HR:
         Ax = self.constraint_mat@w_intf
         
         jac = np.hstack([jac_intr, jac_intf])
-        H   = jac.T@jac
-        rhs = np.concatenate([jac_intr.T@res, jac_intf.T@res+self.constraint_mat.T@lam])
+        H   = self.scaling*(jac.T@jac)
+        rhs = np.concatenate([self.scaling*(jac_intr.T@res),
+                              self.scaling*(jac_intf.T@res)+self.constraint_mat.T@lam])
                              
         return res, jac, H, rhs, Ax 
     
@@ -744,7 +776,8 @@ class DD_LS_ROM:
     def __init__(self, ddmdl, 
                  residual_bases,
                  interior_bases, 
-                 interface_bases, 
+                 interface_bases,
+                 port_bases=[],
                  hr=False, 
                  hr_type='collocation',
                  sample_ratio=2, 
@@ -752,18 +785,70 @@ class DD_LS_ROM:
                  n_corners=-1,
                  constraint_type='weak', 
                  n_constraints=1,
-                 seed=None):
+                 seed=None, 
+                 scaling=1):
         self.hr = hr
         self.nxy = ddmdl.nxy
+        self.hxy = ddmdl.hxy
         self.n_sub = ddmdl.n_sub
+        self.ports = ddmdl.ports
+        self.constraint_type = constraint_type 
+        self.scaling = self.hxy if scaling < 0 else scaling
         
-        if constraint_type=='weak': 
+        if constraint_type=='weak': # weak FOM-port constraints
             self.n_constraints = n_constraints
             rng = np.random.default_rng(seed)
             self.constraint_mult = rng.standard_normal(size=(self.n_constraints, ddmdl.n_constraints))
-        else: 
-            self.n_constraints = ddmdl.n_constraints
-            self.constraint_mult = np.eye(self.n_constraints)
+            constraint_mat_list = [self.constraint_mult@s.constraint_mat@interface_bases[j] for j, s in enumerate(ddmdl.subdomain)]
+            
+        else: # strong ROM-port constraints
+            assert len(port_bases) == len(ddmdl.ports)
+            
+            # assign coupling conditions to ROM states
+            # rom_port_ind[j][p] = indices of intf state on subdomain j corresponding to port p
+            self.rom_port_ind = []
+            for s in ddmdl.subdomain:
+                rom_port_dict = {}
+                shift = 0
+                for p in s.in_ports:
+                    rom_port_dict[p] = np.arange(port_bases[p].shape[1])+shift
+                    shift += port_bases[p].shape[1]
+                self.rom_port_ind.append(rom_port_dict)   
+               
+            # assemble interface bases using port bases
+            interface_bases = []
+            n_intf_list = []
+            for i, s in enumerate(ddmdl.subdomain):
+                n_intf = np.sum([len(self.rom_port_ind[i][p]) for p in s.in_ports])
+                n_intf_list.append(n_intf)
+                basis  = np.zeros((2*s.n_interface, n_intf))
+                for p in s.in_ports:
+                    p_ind = np.concatenate([ddmdl.port_dict[ddmdl.ports[p]], ddmdl.port_dict[ddmdl.ports[p]]+ddmdl.nxy])
+                    s_ind = np.concatenate([s.interface_ind, s.interface_ind+ddmdl.nxy])
+                    fomport2intf = np.nonzero(np.isin(s_ind, p_ind))[0]
+                    basis[np.ix_(fomport2intf, self.rom_port_ind[i][p])] += port_bases[p]
+                interface_bases.append(basis)
+            
+            # assemble ROM-port constraint matrices
+            self.n_constraints  = np.sum([(len(port)-1)*port_bases[k].shape[1] for k, port in enumerate(ddmdl.ports)])
+            constraint_mat_list = [sp.coo_matrix((self.n_constraints, n_intf)) for n_intf in n_intf_list]
+            
+            shift = 0 
+            for j, p in enumerate(ddmdl.ports):
+                port = list(p)
+                npj = port_bases[j].shape[1]
+                for i in range(len(port)-1):
+                    s1   = port[i]
+                    constraint_mat_list[s1].col  = np.concatenate((constraint_mat_list[s1].col, self.rom_port_ind[s1][j]))
+                    constraint_mat_list[s1].row  = np.concatenate((constraint_mat_list[s1].row, np.arange(npj)+shift))
+                    constraint_mat_list[s1].data = np.concatenate((constraint_mat_list[s1].data, np.ones(npj)))   
+
+                    s2   = port[i+1]
+                    constraint_mat_list[s2].col  = np.concatenate((constraint_mat_list[s2].col, self.rom_port_ind[s2][j]))
+                    constraint_mat_list[s2].row  = np.concatenate((constraint_mat_list[s2].row, np.arange(npj)+shift))
+                    constraint_mat_list[s2].data = np.concatenate((constraint_mat_list[s2].data, -np.ones(npj)))
+
+                    shift += npj
         
         self.subdomain=list([])
         if hr:
@@ -803,10 +888,11 @@ class DD_LS_ROM:
                                                           interior_bases[i], 
                                                           interface_bases[i], 
                                                           self.hr_type,
-                                                          self.constraint_mult,
+                                                          constraint_mat_list[i],
                                                           int(nz[i]),
                                                           int(ncol[i]), 
-                                                          n_corners=int(n_corners[i])))
+                                                          n_corners=int(n_corners[i]), 
+                                                          scaling=self.scaling))
                 
         else:
             # generate subdomain models
@@ -814,7 +900,8 @@ class DD_LS_ROM:
                 self.subdomain.append(subdomain_LS_ROM(ddmdl.subdomain[i], 
                                                        interior_bases[i], 
                                                        interface_bases[i], 
-                                                       self.constraint_mult))
+                                                       constraint_mat_list[i], 
+                                                       scaling=self.scaling))
     # compute RHS and jacobian for SQP solver
     def FJac(self, w):
         '''
@@ -828,8 +915,9 @@ class DD_LS_ROM:
         outputs:
         val: RHS of the KKT system
         full_jac: KKT matrix
-        
+        runtime: "parallel" runtime to assemble KKT system
         '''
+        start = time()
         shift = 0
         val = list([])
         A_list = list([])
@@ -837,8 +925,11 @@ class DD_LS_ROM:
         
         constraint_res = np.zeros(self.n_constraints)
         lam = w[-self.n_constraints:]
+        runtime = time()-start
+        stimes = np.zeros(self.n_sub)
         
-        for s in self.subdomain:
+        for i, s in enumerate(self.subdomain):
+            start = time()
             interior_ind  = np.arange(s.n_interior)
             interface_ind = np.arange(s.n_interface)
 
@@ -850,34 +941,27 @@ class DD_LS_ROM:
             
             # computes residual, jacobian, and other quantities needed for KKT system
             res, jac, H, rhs, Ax = s.res_jac(w_intr, w_intf, lam)
-        
+            stimes[i] = time()-start
+            
             # RHS block for KKT system
+            start = time()
             val.append(rhs)
             constraint_res += Ax
             
             H_list.append(H)
-            A_list += [sp.csr_matrix((self.n_constraints, s.n_interior)), s.constraint_mat]
-                             
-#             res, jac_interior, jac_interface = s.res_jac(w_intr, w_intf)
-
-#             ATlam = s.constraint_mat.T@lam
-
-#             val.append(np.concatenate([jac_interior.T@res, jac_interface.T@res+ATlam]))
-            
-#             constraint_res += s.constraint_mat@w_intf
-
-#             jac = np.hstack([jac_interior, jac_interface])
-#             H = jac.T@jac
-#             H_list.append(H)
-            
-#             A_list += [sp.csr_matrix((self.n_constraints, s.n_interior)), s.constraint_mat]
-
+            A_list += [sp.csr_matrix((self.n_constraints, s.n_interior)), s.constraint_mat]                            
+            runtime += time()-start
+        
+        start = time()
         val.append(constraint_res)
         val = np.concatenate(val)
         H_block = sp.block_diag(H_list)
         A_block = sp.hstack(A_list)
         full_jac = sp.bmat([[H_block, A_block.T], [A_block, None]]).tocsr()
-        return val, full_jac
+        runtime += time()-start
+        runtime += stimes.max()
+        
+        return val, full_jac, runtime
     
     # solve SQP using Lagrange-Newton SQP
     def solve(self, w0, tol=1e-5, maxit=20, print_hist=False, rhs_hist=False):
@@ -904,9 +988,7 @@ class DD_LS_ROM:
         '''
         
         print('Starting Newton solver...')
-        start = time()
-        y, res_vecs, res_hist, step_hist, itr = newton_solve(self.FJac, w0, tol=tol, maxit=maxit, print_hist=print_hist)
-        runtime = time()-start
+        y, res_vecs, res_hist, step_hist, itr, runtime = newton_solve(self.FJac, w0, tol=tol, maxit=maxit, print_hist=print_hist)
         print(f'Newton solver terminated after {itr} iterations with residual {res_hist[-1]:1.4e}.')
         
         # assemble solution on full domain from DD-ROM solution
