@@ -17,17 +17,17 @@ from utils.autoencoder import Autoencoder, Encoder, Decoder
 
 # Parser for command line inputs
 parser = argparse.ArgumentParser()
-parser.add_argument("--nx", default=240, type=int, 
+parser.add_argument("--nx", default=480, type=int, 
                    help="number of grid points in x-direction")
-parser.add_argument("--ny", default=12, type=int, 
+parser.add_argument("--ny", default=24, type=int, 
                    help="number of grid points in y-direction")
 parser.add_argument("--n_sub_x", default=2, type=int, 
                   help="number of subdomains in x-direction")
 parser.add_argument("--n_sub_y", default=2, type = int,
                   help="number of subdomains in y-direction")
-parser.add_argument("--intr_ld", default=6, type=int, 
+parser.add_argument("--intr_ld", default=8, type=int, 
                    help="ROM dimension for interior states")
-parser.add_argument("--intf_ld", default=6, type=int, 
+parser.add_argument("--intf_ld", default=4, type=int, 
                    help="ROM dimension for interface states")
 parser.add_argument("--intr_row_nnz", default=5, type=int, 
                    help="Number of nonzeros per row (col) in interior decoder (encoder) mask")
@@ -45,8 +45,10 @@ parser.add_argument("--intr_only", action='store_true',
                    help="Only train autoencoders for interior states")
 parser.add_argument("--intf_only", action='store_true', 
                    help="Only train autoencoders for interface states")
-parser.add_argument("--act_type", default = 'Sigmoid',
+parser.add_argument("--act_type", default = 'Swish',
                    help="Activation type. Only Sigmoid and Swish are implemented")
+parser.add_argument("--sub_list", nargs='*', type=int,
+                   help="Specify which subdomains to train.", default=[])
 args = parser.parse_args()
 
 # grid points for FD discretization
@@ -199,9 +201,14 @@ elif args.intf_only and not args.intr_only:
 else:
     print('Training interior and interface NNs.')
     phases = ['interior', 'interface']
+
+if len(args.sub_list)>0:
+    sub_list = args.sub_list  
+else: 
+    sub_list = np.arange(n_sub, dtype=int)
     
-sub_list = {'interior' : np.arange(n_sub, dtype=int),
-            'interface': np.arange(n_sub, dtype=int)}
+print(f'Training subdomains: {sub_list}')
+sys.stdout.flush()     
 
 # training parameters
 epochs = 2000
@@ -215,7 +222,7 @@ interior, interface, residual = separate_snapshots(ddmdl, snapshot_data, residua
 
 # training for each subdomain and for interface and interiors
 for phase in phases:   
-    for sub in sub_list[phase]:
+    for sub in sub_list:
         latent_dim = latent_dim_dict[phase][sub]
         row_nnz    = row_nnz_dict[phase][sub]
         row_shift  = row_shift_dict[phase][sub]

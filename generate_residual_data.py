@@ -1,6 +1,5 @@
 # generate_data
 # Generate snapshot and residual data for the 2D Burgers equation for a number of parameters.  
-# Author: Alejandro Diaz
 
 import numpy as np
 import matplotlib.pyplot as plt
