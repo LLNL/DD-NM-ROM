@@ -45,6 +45,7 @@ For generating POD bases for the problem sizes considered in this repo, the SVD 
   * `--intf_only`:         Only train autoencoders for interface states
   * `--act_type`:          Activation type. Only Sigmoid and Swish are implemented
 - After `train_rom.sh` finishes, run the jupyter notebook `driver_DD_NMROM.ipynb`. 
+- To train NM-ROMs using the strong ROM-port constraint formulation, run `train_port_decoders.sh` to train autoencoders for each port. This runs the script `driver_train_port_autoencoder.py`, which takes the same optional arguments as `driver_train_rom.py`.
 
 ## Generating Pareto fronts
 - First run jobs `nmrom_nsnaps.sh`, `nmrom_sizes.sh` to train NM-ROMs using different numbers of snapshots and different ROM sizes, respectively. 
