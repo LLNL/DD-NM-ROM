@@ -4,15 +4,15 @@ We apply LS-ROM and NM-ROM to the 2D Burgers equation.
 
 ## Requirements
 The code implementation was done using Python 3.9 and a CUDA-11.4 environment. Below are other required packages. 
-- `numpy`
-- `scipy`
-- `matplotlib`
+- `numpy` (version 1.23.5)
+- `scipy` (version 1.8.1)
+- `matplotlib` (version 3.6.2)
 - `PyTorch` (version 1.12.1)
 - `torch-sparse` (version 0.6.10)
-- `torch-scatter`
-- `dill`
-- [`sparselinear`](https://github.com/hyeon95y/SparseLinear) 
-- `jupyter`
+- `torch-scatter` (version 2.0.8)
+- `dill` (version 0.3.6)
+- [`sparselinear`](https://github.com/hyeon95y/SparseLinear) (version 0.0.5)
+- `jupyter` (version 5.1.3)
 
 ## Generating snapshot data for training
 - To generate the training data, ssh into lassen and run `generate_training_data.sh`. This runs the scipts `generate_residual_data.py` and `generate_snapshot_data.py`.
