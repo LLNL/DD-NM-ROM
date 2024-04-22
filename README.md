@@ -1,7 +1,6 @@
 # DD-NM-ROM
 Author: Alejandro Diaz  
-We apply LS-ROM and NM-ROM to the 2D Burgers equation.  
-The code in this repo and its documentation is a work in progress. If you have any questions, please email me at and5@rice.edu.
+We apply LS-ROM and NM-ROM to the 2D Burgers equation. 
 
 ## Requirements
 The code implementation was done using Python 3.9 and a CUDA-11.4 environment. Below are other required packages. 
