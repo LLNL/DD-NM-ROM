@@ -4,12 +4,16 @@ We apply LS-ROM and NM-ROM to the 2D Burgers equation.
 The code in this repo and its documentation is a work in progress. If you have any questions, please email me at and5@rice.edu.
 
 ## Requirements
-- To use the code in this repo, first create an Open-CE v1.7.2 with CUDA-11.4 for Lassen environment following the instructions [here](https://lc.llnl.gov/confluence/display/LC/2022/10/20/Open-CE+v1.7.2+with+CUDA-11.4+for+Lassen).  
-  * In the Open-CE environment, also install the dill, torch-sparse, torch-scatter, and sparselinear packages.
-- Install jupyter for the Open-CE environment using the instructions on the PowerAI page [here](https://lc.llnl.gov/confluence/display/LC/IBM+PowerAI+in+LC).
-- I also recommend creating a virtual environment containing PyTorch that can be run on a CPU machine (e.g. quartz) ([instructions](https://lc.llnl.gov/confluence/display/LC/PyTorch+in+LC)). The dill package is also needed here. 
-For generating POD bases for the problem sizes considered in this repo, the SVD routine is much faster on CPUs. 
-- Install jupyter for your CPU PyTorch environment ([instructions](https://lc.llnl.gov/confluence/display/LC/JupyterHub+and+Jupyter+Notebook)). 
+The code implementation was done using Python 3.9 and a CUDA-11.4 environment. Below are other required packages. 
+- `numpy`
+- `scipy`
+- `matplotlib`
+- `PyTorch` (version 1.12.1)
+- `torch-sparse` (version 0.6.10)
+- `torch-scatter`
+- `dill`
+- [`sparselinear`](https://github.com/hyeon95y/SparseLinear) 
+- `jupyter`
 
 ## Generating snapshot data for training
 - To generate the training data, ssh into lassen and run `generate_training_data.sh`. This runs the scipts `generate_residual_data.py` and `generate_snapshot_data.py`.
