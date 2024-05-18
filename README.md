@@ -1,6 +1,28 @@
 # DD-NM-ROM
-Author: Alejandro Diaz  
-We apply LS-ROM and NM-ROM to the 2D Burgers equation. 
+DD-NM-ROM integrates nonlinear-manifold reduced order models (NM-ROMs) with
+domain decomposition (DD). NM-ROMs approximate the full order model (FOM) state
+in a nonlinear-manifold by training a shallow, sparse autoencoder using FOM
+snapshot data. These NM-ROMs can be advantageous over linear-subspace ROMs
+(LS-ROMs) for problems with slowly decaying Kolmogorov-width. However, the
+number of NM-ROM parameters that need to be trained scales with the size of the
+FOM. Moreover, for ``extreme-scale" problems, the storage of high-dimensional
+FOM snapshots alone can make ROM training expensive. To alleviate the training
+cost, DD-NM-ROM applies DD to the FOM, computes NM-ROMs on each subdomain, and
+couples them to obtain a global NM-ROM. This approach has several advantages:
+Subdomain NM-ROMs can be trained in parallel, involve fewer parameters to be
+trained than global NM-ROMs, require smaller subdomain FOM dimensional training
+data, and can be tailored to subdomain-specific features of the FOM. The
+shallow, sparse architecture of the autoencoder used in each subdomain NM-ROM
+allows application of hyper-reduction (HR), reducing the complexity caused by
+nonlinearity and yielding computational speedup of the NM-ROM. DD-NM-ROM
+provides the first application of NM-ROM (with HR) to a DD problem. In
+particular, DD-NM-ROM implements an algebraic DD reformulation of the FOM,
+training a NM-ROM with HR for each subdomain, and a sequential quadratic
+programming (SQP) solver to evaluate the coupled global NM-ROM.  The DD-NM-ROM
+with HR approach is numerically compared to a DD-LS-ROM with HR on the 2D
+steady-state Burgers' equation, showing an order of magnitude improvement in
+accuracy of the proposed DD NM-ROM over the DD LS-ROM.
+
 
 ## Requirements
 The code implementation was done using Python 3.9 and a CUDA-11.4 environment. Below are other required packages. 
@@ -24,6 +46,7 @@ The code implementation was done using Python 3.9 and a CUDA-11.4 environment. B
   * `--viscosity`:  viscosity parameter for 2D Burgers equation (fixed)
   * `--maxit`:      maximum number of iterations for Newton solver
   * `--tol`:        absolute tolerance for Newton solver
+
 ## Training a DD-LS-ROM (do this first)
 - Run the notebook `driver_DD_LSROM.ipynb` in the CPU environment first on all configurations of interest.
 - For example, run with different subdomain configurations, different number of training snapshots, etc. 
@@ -53,3 +76,26 @@ The code implementation was done using Python 3.9 and a CUDA-11.4 environment. B
 ## Generating Pareto fronts
 - First run jobs `nmrom_nsnaps.sh`, `nmrom_sizes.sh` to train NM-ROMs using different numbers of snapshots and different ROM sizes, respectively. 
 - Run the notebooks `driver_pareto_hr.ipynb`, `driver_pareto_nsnaps.ipynb`, `driver_pareto_romsize.ipynb`.
+
+## Citation
+[Diaz, Alejandro N., Youngsoo Choi, and Matthias Heinkenschloss. "A fast and accurate domain decomposition nonlinear manifold reduced order model." Computer Methods in Applied Mechanics and Engineering 425 (2024): 116943.](https://doi.org/10.1016/j.cma.2024.116943)
+
+## Authors 
+- Alejandro Diaz
+- Youngsoo Choi
+- Matthias Heinkenschloss   
+
+## Aknowledgement
+A. Diaz was supported for this work by a Defense Science and Technology
+Internship (DSTI) at Lawrence Livermore National Laboratory and a 2021 National
+Defense Science and Engineering Graduate Fellowship, United States.  Y. Choi
+was supported for this work by the US Department of Energy under the
+Mathematical Multifaceted Integrated Capability Centers -- DoE Grant DE --
+SC0023164; The Center for Hierarchical and Robust Modeling of Non-Equilibrium
+Transport (CHaRMNET).
+
+## License
+DD-NM-ROM is distributed under the terms of the MIT license. All new contributions must be made under the MIT. See
+[LICENSE-MIT](https://github.com/LLNL/DD-NM-ROM/blob/main/LICENSE)
+
+LLNL Release Nubmer: LLNL-CODE-864366
