@@ -81,9 +81,9 @@ The code implementation was done using Python 3.9 and a CUDA-11.4 environment. B
 [Diaz, Alejandro N., Youngsoo Choi, and Matthias Heinkenschloss. "A fast and accurate domain decomposition nonlinear manifold reduced order model." Computer Methods in Applied Mechanics and Engineering 425 (2024): 116943.](https://doi.org/10.1016/j.cma.2024.116943)
 
 ## Authors 
-- Alejandro Diaz
-- Youngsoo Choi
-- Matthias Heinkenschloss   
+- Alejandro Diaz (Sandia National Laboratories)
+- Youngsoo Choi (Lawrence Livermore National Laboratory)
+- Matthias Heinkenschloss (Rice University)
 
 ## Aknowledgement
 A. Diaz was supported for this work by a Defense Science and Technology
