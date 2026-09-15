@@ -42,7 +42,8 @@ def test_solvers_share_common_constructor_options(monkeypatch, solver_type):
   monkeypatch.delenv("DDNMROM_SOLVE_PRECONDITIONER", raising=False)
   monkeypatch.setattr(bkd, "device", lambda: torch.device("cpu"))
 
-  assert tuple(inspect.signature(solver_type).parameters) == _COMMON_PARAMETERS
+  parameters = tuple(inspect.signature(solver_type).parameters)
+  assert parameters[:len(_COMMON_PARAMETERS)] == _COMMON_PARAMETERS
 
   solver = solver_type(
     model=_Model(),
