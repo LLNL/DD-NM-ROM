@@ -27,6 +27,7 @@ _DDNMROM_BACKEND_DTENSOR_CHECKS = False
 
 
 _DDNMROM_BACKEND_MPI_FILLZERO = False
+_DDNMROM_BACKEND_MPI_GPU_AWARE = False
 
 
 
@@ -46,6 +47,7 @@ _env_vars = {
   # Backend specific options
   "DDNMROM_DEVICE_PER_NODE": _DDNMROM_BACKEND_DEVICE_PER_NODE, # physical devices per node, used to map gpus to physical layout, change depending on hardware
   "DDNMROM_MPI_BUFFER_ZEROFILL": _DDNMROM_BACKEND_MPI_FILLZERO, # whether to create communication buffers always filled with zero, or empty memory
+  "DDNMROM_MPI_GPU_AWARE": _DDNMROM_BACKEND_MPI_GPU_AWARE, # enable device-resident mpi4py buffers (requires validated GPU-aware MPI)
   "DDNMROM_DTENSOR_CHECKS": _DDNMROM_BACKEND_DTENSOR_CHECKS, # enable torch.DTensor shape checks on creation (adds overhead)
   }
 

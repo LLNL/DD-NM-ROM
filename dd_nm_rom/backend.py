@@ -970,6 +970,31 @@ def distributed() -> bool:
     return dist.is_available() and dist.is_initialized()
   return True
 
+
+def distributed_backend() -> Union[str, None]:
+  """
+  Return the active Torch distributed backend implementation.
+
+  PyTorch reports both NCCL and RCCL process groups as ``"nccl"``. A
+  non-``None`` ROCm version identifies the RCCL-backed build.
+
+  :return: ``"gloo"``, ``"nccl"``, ``"rccl"``, or ``None`` if Torch
+           distributed is not initialized.
+  :rtype: Union[str, None]
+  """
+  if not distributed() or not dist.is_available() or not dist.is_initialized():
+    return None
+
+  backend = str(dist.get_backend()).lower()
+  if backend == "nccl" and torch.version.hip is not None:
+    return "rccl"
+  return backend
+
+
+def mpi_gpu_aware() -> bool:
+  """Return whether device-resident mpi4py buffers are explicitly enabled."""
+  return cfg.update_from_env("DDNMROM_MPI_GPU_AWARE", False, verbose=False)
+
 def get_rank() -> int:
   """
   Return the current rank, defaulting to zero in serial execution.
@@ -1327,7 +1352,12 @@ def gatherv_tensor(
         rank_offsets.append(rank_offsets[rank-1] + rank_sizes[rank-1])
 
     alloc_fn = torch.zeros if _USE_ZEROFILL else torch.empty
-    data = alloc_fn(total_size, dtype=x.dtype, device="cpu")
+    use_device_buffer = mpi_gpu_aware() and x.device.type == "cuda"
+    data = alloc_fn(
+      total_size,
+      dtype=x.dtype,
+      device=device() if use_device_buffer else "cpu",
+    )
 
 
     rank_sizes = tuple(rank_sizes)
@@ -1338,11 +1368,17 @@ def gatherv_tensor(
 
   #assert x.storage_offset() == 0
 
-  # mpi4py requires a contiguous host buffer.  State vectors assembled by the
-  # DD-FOM are frequently tensor views, and passing those views directly can
-  # trigger DLPack ``buffer is not contiguous`` errors.
-  send_buffer = _ensure_contiguous(x).detach().cpu().numpy()
-  recv_buffer = data.numpy() if _RANK == root else None
+  # mpi4py requires contiguous buffers. Device-resident buffers are opt-in
+  # because GPU-aware MPI support is implementation-specific and can cause
+  # bus errors on systems without a validated CUDA/ROCm-aware MPI stack.
+  contiguous_x = _ensure_contiguous(x)
+  use_device_buffer = mpi_gpu_aware() and x.device.type == "cuda"
+  if use_device_buffer:
+    send_buffer = contiguous_x
+    recv_buffer = data if _RANK == root else None
+  else:
+    send_buffer = contiguous_x.detach().cpu().numpy()
+    recv_buffer = data.numpy() if _RANK == root else None
   _COMM.Gatherv(send_buffer, [recv_buffer, rank_sizes, rank_offsets, dtype], root)
 
   #data = comm.gather(x, dim=dim, out=data)

@@ -135,10 +135,15 @@ def _build_numpy_and_torch(monkeypatch):
 
 
 def _call_numpy(monkeypatch, function, *args, **kwargs):
-  with monkeypatch.context() as serial:
-    _install_serial_numpy_backend(serial)
-    bkd.set_backend("numpy")
-    return function(*args, **kwargs)
+  original_backend = bkd.get_backend()
+  try:
+    with monkeypatch.context() as serial:
+      _install_serial_numpy_backend(serial)
+      bkd.set_backend("numpy")
+      return function(*args, **kwargs)
+  finally:
+    # Restore the active backend before any Torch/distributed operation runs.
+    bkd.set_backend(original_backend)
 
 
 def _call_torch(function, *args, **kwargs):
