@@ -1,4 +1,7 @@
+import logging
 import os
+
+logger = logging.getLogger(__name__)
 
 # General options
 _DDNMROM_VERBOSE = int(0)
@@ -24,6 +27,7 @@ _DDNMROM_BACKEND_DTENSOR_CHECKS = False
 
 
 _DDNMROM_BACKEND_MPI_FILLZERO = False
+_DDNMROM_BACKEND_MPI_GPU_AWARE = False
 
 
 
@@ -43,22 +47,21 @@ _env_vars = {
   # Backend specific options
   "DDNMROM_DEVICE_PER_NODE": _DDNMROM_BACKEND_DEVICE_PER_NODE, # physical devices per node, used to map gpus to physical layout, change depending on hardware
   "DDNMROM_MPI_BUFFER_ZEROFILL": _DDNMROM_BACKEND_MPI_FILLZERO, # whether to create communication buffers always filled with zero, or empty memory
+  "DDNMROM_MPI_GPU_AWARE": _DDNMROM_BACKEND_MPI_GPU_AWARE, # enable device-resident mpi4py buffers (requires validated GPU-aware MPI)
   "DDNMROM_DTENSOR_CHECKS": _DDNMROM_BACKEND_DTENSOR_CHECKS, # enable torch.DTensor shape checks on creation (adds overhead)
   }
 
 
 def print_config_env():
-  print("----------------------")
-  print("DDNMROM configuration:")
-  print("----------------------")
+  lines = ["----------------------", "DDNMROM configuration:", "----------------------"]
   for (var, default_val) in _env_vars.items():
     env_value = os.getenv(var)
     if env_value is None:
-      print("   '{}': {} (default)".format(var, default_val))
+      lines.append("   '{}': {} (default)".format(var, default_val))
     else:
-      print("   '{}': {} (env)".format(var, env_value))
-  print("----------------------")
-  print("")
+      lines.append("   '{}': {} (env)".format(var, env_value))
+  lines.extend(["----------------------", ""])
+  logger.info("\n".join(lines))
 
 
 def get_config_val(var, get_default=True):
@@ -66,7 +69,7 @@ def get_config_val(var, get_default=True):
     raise RuntimeError("Tried to find unexpected config var '{}'".format(var))
   
   if get_default:
-    print(" GETTING DEFAULT FOR '{}'".format(var))
+    logger.debug("GETTING DEFAULT FOR '%s'", var)
     value = os.getenv(var, _env_vars[var])
     if value is None:
       raise RuntimeError(" Error getting config var '{}'".format(var))
@@ -100,7 +103,10 @@ def update_from_env(var, current=None, verbose=True):
 
     # print a message if the existing value changed from the existing
     if verbose and _current != opt:
-      print(" *** Overriding option from environment! '{}' (was {}, now {})".format(var, _current, opt))
+      logger.debug(
+        "Overriding option from environment! '%s' (was %s, now %s)",
+        var, _current, opt,
+      )
     return opt
   else:
     # if env variable is not defined, then we do nothing and return current value

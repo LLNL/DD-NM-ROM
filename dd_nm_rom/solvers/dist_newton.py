@@ -60,6 +60,11 @@ class DistNewton(Solver):
                          solver.  ``None`` (or ``"none"``) disables
                          preconditioning. Defaults to ``None``.
   :type preconditioner: str or None
+  :param linear_maxiter: Maximum number of iterations for the distributed
+                         Krylov solve. Defaults to 100.
+  :type linear_maxiter: int
+  :param linear_restart: Krylov restart interval. Defaults to 30.
+  :type linear_restart: int
   """
 
   def __init__(
@@ -73,6 +78,8 @@ class DistNewton(Solver):
     distributed: bool = False,
     use_line_search: bool = True,
     preconditioner: str | None = None,
+    linear_maxiter: int = 100,
+    linear_restart: int = 30,
   ) -> None:
     # The global KKT matrix is replicated, so a direct solve is performed on
     # rank zero and its direction is broadcast to the remaining ranks.
@@ -127,6 +134,8 @@ class DistNewton(Solver):
       use_line_search=use_line_search,
       preconditioner=preconditioner,
     )
+    self.linear_maxiter = linear_maxiter
+    self.linear_restart = linear_restart
 
   @staticmethod
   def _full_tensor(x):
@@ -414,13 +423,13 @@ class DistNewton(Solver):
             preconditioner=self.preconditioner,
             atol=1e-9,
             rtol=1e-9,
-            maxiter=100,
+            maxiter=self.linear_maxiter,
             verbose=bkd.root(),
         ):
 
           x_dt = D.solve_distributed_shard(
               local_res,
-              restart=30,
+              restart=self.linear_restart,
           )
       
       dx = x_dt

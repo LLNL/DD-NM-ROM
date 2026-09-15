@@ -153,6 +153,8 @@ def _build_case(
   *,
   serial,
   world_size,
+  nx_intr=16,
+  ny_intr=16,
   compact=True,
   constraint_type="strong",
   boundary_type="neumann",
@@ -165,6 +167,8 @@ def _build_case(
         m,
         world_size=world_size,
         subs_per_rank=2 * world_size,
+        nx_intr=nx_intr,
+        ny_intr=ny_intr,
         compact=compact,
         constraint_type=constraint_type,
         boundary_type=boundary_type,
@@ -174,6 +178,8 @@ def _build_case(
     monkeypatch,
     world_size=world_size,
     subs_per_rank=2,
+    nx_intr=nx_intr,
+    ny_intr=ny_intr,
     compact=compact,
     constraint_type=constraint_type,
     boundary_type=boundary_type,
@@ -185,13 +191,15 @@ def _build_case_impl(
   *,
   world_size,
   subs_per_rank,
+  nx_intr=16,
+  ny_intr=16,
   compact=True,
   constraint_type="strong",
   boundary_type="neumann",
 ):
   mesh = mesh_mod.MeshDD(
-    nx_intr=16,
-    ny_intr=16,
+    nx_intr=nx_intr,
+    ny_intr=ny_intr,
     lx_sub=0.5,
     ly_sub=0.5,
     x0=0.0,
@@ -250,7 +258,13 @@ def _build_case_impl(
   return dd_rom, x_phys
 
 
-def _build_reference_and_parallel(monkeypatch, request):
+def _build_reference_and_parallel(
+  monkeypatch,
+  request,
+  *,
+  nx_intr=16,
+  ny_intr=16,
+):
   world_size = MPI.COMM_WORLD.Get_size()
   assert bkd.get_nranks() == world_size
   assert bkd.distributed() == (world_size > 1)
@@ -258,6 +272,8 @@ def _build_reference_and_parallel(monkeypatch, request):
     monkeypatch,
     serial=True,
     world_size=world_size,
+    nx_intr=nx_intr,
+    ny_intr=ny_intr,
   )
   bkd.set_backend("torch")
   bkd.set_seed(0)
@@ -265,15 +281,23 @@ def _build_reference_and_parallel(monkeypatch, request):
     monkeypatch,
     serial=False,
     world_size=world_size,
+    nx_intr=nx_intr,
+    ny_intr=ny_intr,
   )
   return ref_rom, test_rom, x_phys
 
 
 def _call_reference(monkeypatch, fun, *args, **kwargs):
-  with monkeypatch.context() as m:
-    _install_serial_numpy_backend(m)
-    _set_numpy_seed()
-    return fun(*args, **kwargs)
+  original_backend = bkd.get_backend()
+  try:
+    with monkeypatch.context() as m:
+      _install_serial_numpy_backend(m)
+      _set_numpy_seed()
+      return fun(*args, **kwargs)
+  finally:
+    # The serial reference temporarily changes the process-global backend.
+    # Restore it before the caller continues with the distributed Torch path.
+    bkd.set_backend(original_backend)
 
 
 def _call_parallel(fun, *args, **kwargs):
@@ -541,7 +565,14 @@ def test_dist_newton_dd_rom_one_step_matches_serial_kkt(monkeypatch, request):
   if not bkd.is_torch_backend() or not bkd.distributed():
     pytest.skip("requires a multi-rank Torch backend for DistNewton")
 
-  ref_rom, test_rom, x_phys = _build_reference_and_parallel(monkeypatch, request)
+  # Keep this iterative distributed comparison small enough for the CI
+  # FGMRES solve, while preserving the same 2/4-rank decomposition logic.
+  ref_rom, test_rom, x_phys = _build_reference_and_parallel(
+    monkeypatch,
+    request,
+    nx_intr=4,
+    ny_intr=4,
+  )
   ref_x0, test_x0 = _compare_get_init_sol(
     monkeypatch, request, ref_rom, test_rom, x_phys,
   )
@@ -568,6 +599,8 @@ def test_dist_newton_dd_rom_one_step_matches_serial_kkt(monkeypatch, request):
     stepsize_min=1.0e-20,
     verbose=False,
     distributed=True,
+    linear_maxiter=1000,
+    linear_restart=100,
   )
   x1, res_hist, res_norm_hist, step_hist, iterations, _ = solver.solve(test_x0)
 
