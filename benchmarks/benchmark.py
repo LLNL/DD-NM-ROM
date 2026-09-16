@@ -7,8 +7,8 @@ Project workloads should keep model construction in ``prepare`` and one
 measured operation in ``run``.
 
 Examples:
-  .venv/bin/python benchmarks/benchmark.py --spec benchmarks/specs/matmul.json
-  .venv/bin/python benchmarks/benchmark.py --spec benchmarks/specs/matmul.json \
+  .venv/bin/python benchmarks/benchmark.py --spec benchmarks/specs/backend_dense_linear.json
+  .venv/bin/python benchmarks/benchmark.py --spec benchmarks/specs/backend_device.json \
       --launcher slurm --ranks 1,2,4 --output-dir benchmark_jobs
 """
 

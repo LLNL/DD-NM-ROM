@@ -5,7 +5,7 @@ SLURM/FLUX batch-script generation. Use the repository virtual environment:
 
 ```text
 .venv/bin/python benchmarks/benchmark.py \
-  --spec benchmarks/specs/matmul.json --backend numpy
+  --spec benchmarks/specs/backend_dense_linear.json --backend numpy
 ```
 
 A workload is either a callable accepting a configuration dictionary, or a
@@ -17,7 +17,7 @@ given:
 
 ```text
 .venv/bin/python benchmarks/benchmark.py \
-  --spec benchmarks/specs/matmul.json --backend torch_gpu \
+  --spec benchmarks/specs/backend_device.json --backend torch_gpu \
   --launcher slurm --ranks 1,2,4 \
   --account asccasc --queue pbatch --walltime 01:00:00 \
   --gpus-per-task 1 \
@@ -77,6 +77,76 @@ subdomains:
 
 Full DD-FOM/DD-ROM solves default to one measured repetition because solver
 state may be mutated by a solve.
+
+Backend microbenchmarks
+-----------------------
+
+`workloads_backend.py` covers operations that are otherwise hidden inside
+solver timings:
+
+* `backend_dense_linear.json` measures dense matrix-matrix and matrix-vector
+  products through `backend.to_backend`.
+* `backend_sparse_linear.json` measures sparse matrix-vector multiplication
+  through `backend.to_sp_backend`.
+* `backend_sparse_assembly.json` measures `speye` and `torch_bmat_new` on the
+  Torch CPU backend.
+* `backend_device.json` measures a device matmul and activation. Run it with
+  `--backend torch_gpu` to measure GPU kernels; the runner synchronizes CUDA
+  before and after every measured repetition.
+* `backend_collective.json` expands into timing cases for the backend barrier,
+  broadcast, gather, scatter, and local-size helpers. Use Torch with a batch
+  launcher and rank counts greater than one for meaningful MPI timings.
+
+For example, serial CPU coverage is:
+
+```text
+.venv/bin/python benchmarks/benchmark.py \
+  --spec benchmarks/specs/backend_dense_linear.json --backend numpy
+.venv/bin/python benchmarks/benchmark.py \
+  --spec benchmarks/specs/backend_sparse_linear.json --backend torch_cpu
+.venv/bin/python benchmarks/benchmark.py \
+  --spec benchmarks/specs/backend_sparse_assembly.json --backend torch_cpu
+```
+
+GPU and MPI measurements are opt-in and should be launched only on matching
+hardware. GPU-aware MPI paths in `gatherv_tensor` are selected by setting
+`DDNMROM_MPI_GPU_AWARE=1` in the scheduler environment and using
+`--backend torch_gpu`. The benchmark records the operation and result shape,
+while the runner records rank-level timings and the active backend/device.
+
+Adding a benchmark
+------------------
+
+Add a workload module with a `prepare(config)`/`run(state)` pair, keeping
+allocation and setup in `prepare` so they are excluded from the measured
+interval. Then add a JSON spec such as this dense backend-operation example:
+
+```json
+{
+  "name": "backend_dense_linear",
+  "target": "benchmarks.workloads_backend:backend_dense_linear",
+  "warmups": 2,
+  "repetitions": 5,
+  "threads": 1,
+  "config": {
+    "rows": 1024,
+    "inner": 1024,
+    "cols": 1024,
+    "seed": 0
+  }
+}
+```
+
+Run it against the desired backend:
+
+```text
+.venv/bin/python benchmarks/benchmark.py \
+  --spec benchmarks/specs/backend_dense_linear.json --backend numpy
+```
+
+The same spec can be compared with `torch_cpu`, or with `torch_gpu` on GPU
+hardware. The target may also be a single callable accepting the config
+dictionary when no separate setup phase is needed.
 
 Generic sweeps are supported without creating temporary spec files. Independent
 axes use a Cartesian product:
